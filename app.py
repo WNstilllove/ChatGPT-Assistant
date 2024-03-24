@@ -5,14 +5,21 @@ import streamlit as st
 import uuid
 import pandas as pd
 import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=apikey,
+api_key=st.secrets["apikey_tem"],
+api_key=st.secrets["apikey"])
 from requests.models import ChunkedEncodingError
 from streamlit.components import v1
 from voice_toolkit import voice_toolkit
 
 if "apibase" in st.secrets:
-    openai.api_base = st.secrets["apibase"]
+    # TODO: The 'openai.api_base' option isn't read in the client API. You will need to pass it when you instantiate the client, e.g. 'OpenAI(base_url=st.secrets["apibase"])'
+    # openai.api_base = st.secrets["apibase"]
 else:
-    openai.api_base = "https://api.openai.com/v1"
+    # TODO: The 'openai.api_base' option isn't read in the client API. You will need to pass it when you instantiate the client, e.g. 'OpenAI(base_url="https://api.openai.com/v1")'
+    # openai.api_base = "https://api.openai.com/v1"
 
 st.set_page_config(page_title="ChatGPT Assistant", layout="wide", page_icon="🤖")
 # 自定义元素样式
@@ -502,42 +509,37 @@ if st.session_state["user_input_content"] != "":
     with st.spinner("🤔"):
         try:
             if apikey := st.session_state["apikey_input"]:
-                openai.api_key = apikey
             # 配置临时apikey，此时不会留存聊天记录，适合公开使用
             elif "apikey_tem" in st.secrets:
-                openai.api_key = st.secrets["apikey_tem"]
             # 注：当st.secrets中配置apikey后将会留存聊天记录，即使未使用此apikey
             else:
-                openai.api_key = st.secrets["apikey"]
-            r = openai.ChatCompletion.create(
-                model=st.session_state["select_model"],
-                messages=history_need_input,
-                stream=True,
-                **paras_need_input,
-            )
+            r = client.chat.completions.create(model=st.session_state["select_model"],
+            messages=history_need_input,
+            stream=True,
+            **paras_need_input)
         except (FileNotFoundError, KeyError):
             area_error.error(
                 "缺失 OpenAI API Key，请在复制项目后配置Secrets，或者在模型选项中进行临时配置。"
                 "详情见[项目仓库](https://github.com/PierXuY/ChatGPT-Assistant)。"
             )
-        except openai.error.AuthenticationError:
+        except openai.AuthenticationError:
             area_error.error("无效的 OpenAI API Key。")
-        except openai.error.APIConnectionError as e:
+        except openai.APIConnectionError as e:
             area_error.error("连接超时，请重试。报错：   \n" + str(e.args[0]))
-        except openai.error.InvalidRequestError as e:
+        except openai.InvalidRequestError as e:
             area_error.error("无效的请求，请重试。报错：   \n" + str(e.args[0]))
-        except openai.error.RateLimitError as e:
+        except openai.RateLimitError as e:
             area_error.error("请求受限。报错：   \n" + str(e.args[0]))
         else:
             st.session_state["chat_of_r"] = current_chat
-            st.session_state["r"] = r
+            st.session_state.r = r
             st.experimental_rerun()
 
 if ("r" in st.session_state) and (current_chat == st.session_state["chat_of_r"]):
     if current_chat + "report" not in st.session_state:
         st.session_state[current_chat + "report"] = ""
     try:
-        for e in st.session_state["r"]:
+        for e in st.session_state.r:
             if "content" in e["choices"][0]["delta"]:
                 st.session_state[current_chat + "report"] += e["choices"][0]["delta"][
                     "content"
